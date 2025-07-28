@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Submit Scores</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+  h1 { margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  input[type="text"] { width: 60px; padding: 5px; text-align: center; }
+  .dnf-checkbox { transform: scale(1.2); }
+  .btn-group { text-align: center; }
+  button { padding: 10px 20px; margin: 5px; }
+  #confirmationModal {
+    display: none; position: fixed; top:0; left:0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.6); 
+    justify-content: center; align-items: center;
+  }
+  #confirmationContent {
+    background: white; padding: 20px; border-radius: 8px; max-width: 500px; max-height: 80vh; overflow-y: auto;
+  }
+  #confirmationContent table { margin: 0; }
+</style>
+</head>
+<body>
+  <h1>Submit Scores</h1>
+  <div id="roundInfo"></div>
+  <form id="scoresForm">
+    <table>
+      <thead>
+        <tr>
+          <th>Tag</th>
+          <th>Player Name</th>
+          <th>Rel. Score</th>
+          <th>Raw Score</th>
+          <th>DNF</th>
+        </tr>
+      </thead>
+      <tbody id="playersTableBody"></tbody>
+    </table>
+    <div class="btn-group">
+      <button type="button" id="reviewBtn">Review Scores</button>
+      <button type="button" id="editBtn" style="display:none;">Edit Scores</button>
+      <button type="submit" id="confirmBtn" style="display:none;">Confirm Scores</button>
+    </div>
+  </form>
+
+  <div id="confirmationModal">
+    <div id="confirmationContent">
+      <h2>Confirm Round Scores</h2>
+      <div id="confirmationSummary"></div>
+      <div style="text-align: center; margin-top: 15px;">
+        <button id="confirmModalBtn">Confirm</button>
+        <button id="cancelModalBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const parTextMap = {
+    'E': 0,
+    'e': 0
+  };
+
+  let roundData = null;
+  let par = 0;
+  let players = [];
+
+  // Parse relative score string (+3, -2, E, e)
+  function parseRelScore(str) {
+    str = str.trim();
+    if (str.toUpperCase() === 'E') return 0;
+    let num = parseInt(str, 10);
+    if (!isNaN(num)) return num;
+    return null;
+  }
+
+  // Format raw score to display nicely
+  function formatRawScore(score) {
+    return score;
+  }
+
+  // Update raw score cells live
+  function updateRawScores() {
+    const rows = document.querySelectorAll('#playersTableBody tr');
+    rows.forEach(row => {
+      const relInput = row.querySelector('.rel-score');
+      const rawCell = row.querySelector('.raw-score');
+      const dnfCheckbox = row.querySelector('.dnf-checkbox');
+
+      let relVal = parseRelScore(relInput.value);
+      if (relVal === null) relVal = 0;
+      let rawScore = par + relVal;
+      if (dnfCheckbox.checked) {
+        rawCell.textContent = '-';
+      } else {
+        rawCell.textContent = formatRawScore(rawScore);
+      }
+    });
+  }
+
+  // Load round from sessionStorage and build table
+  function loadRound() {
+    const rawRound = sessionStorage.getItem('currentRound');
+    if (!rawRound) {
+      alert("No current round found. Please check in first.");
+      window.location.href = "check-in.html";
+      return;
+    }
+    roundData = JSON.parse(rawRound);
+    par = roundData.par;
+    players = roundData.players;
+
+    // Sort players by tag ascending (starting tag)
+    players.sort((a, b) => a.tag - b.tag);
+
+    document.getElementById('roundInfo').textContent = `Course: ${roundData.course} | Par: ${par}`;
+
+    const tbody = document.getElementById('playersTableBody');
+    tbody.innerHTML = '';
+
+    players.forEach(p => {
+      const tr = document.createElement('tr');
+
+      tr.innerHTML = `
+        <td>${p.tag}</td>
+        <td>${p.name}</td>
+        <td><input type="text" class="rel-score" value="E" maxlength="3" pattern="^[+-]?\\d+|[Ee]$" /></td>
+        <td class="raw-score">${par}</td>
+        <td><input type="checkbox" class="dnf-checkbox" /></td>
+      `;
+
+      tbody.appendChild(tr);
+    });
+
+    // Add live update event
+    tbody.querySelectorAll('.rel-score').forEach(input => {
+      input.addEventListener('input', () => {
+        updateRawScores();
+      });
+    });
+
+    tbody.querySelectorAll('.dnf-checkbox').forEach(chk => {
+      chk.addEventListener('change', () => {
+        // When DNF checked, clear relative score input and disable it
+        const row = chk.closest('tr');
+        const relInput = row.querySelector('.rel-score');
+        if (chk.checked) {
+          relInput.value = '';
+          relInput.disabled = true;
+        } else {
+          relInput.disabled = false;
+          relInput.value = 'E';
+        }
+        updateRawScores();
+      });
+    });
+
+    updateRawScores();
+  }
+
+  // Show confirmation modal with summary of scores
+  function showConfirmation() {
+    const tbody = document.getElementById('playersTableBody');
+    let summaryHtml = '<table><thead><tr><th>Tag</th><th>Player</th><th>Rel. Score</th><th>Raw Score</th><th>DNF</th></tr></thead><tbody>';
+    let allValid = true;
+
+    players.forEach((p, i) => {
+      const row = tbody.children[i];
+      const relInput = row.querySelector('.rel-score');
+      const dnfCheckbox = row.querySelector('.dnf-checkbox');
+
+      let relScoreRaw = relInput.value.trim();
+      let relScore = parseRelScore(relScoreRaw);
+
+      if (!dnfCheckbox.checked && (relScoreRaw === '' || relScore === null)) {
+        allValid = false;
+      }
+
+      let rawScore = par + (relScore ?? 0);
+      if (dnfCheckbox.checked) rawScore = '-';
+
+      summaryHtml += `<tr>
+        <td>${p.tag}</td>
+        <td>${p.name}</td>
+        <td>${dnfCheckbox.checked ? '-' : relScoreRaw}</td>
+        <td>${rawScore}</td>
+        <td>${dnfCheckbox.checked ? 'Yes' : 'No'}</td>
+      </tr>`;
+    });
+
+    summaryHtml += '</tbody></table>';
+
+    if (!allValid) {
+      alert("Please fill all relative scores or mark players as DNF.");
+      return false;
+    }
+
+    document.getElementById('confirmationSummary').innerHTML = summaryHtml;
+    document.getElementById('confirmationModal').style.display = 'flex';
+
+    return true;
+  }
+
+  // Redistribute tags based on scores and DNF logic
+  function redistributeTags(scores) {
+    // scores: array of { name, tag, rawScore, dnf, startingTag }
+    // Logic:
+    // - Players who DNF get highest tags from the checked-in tags set (in ascending order)
+    // - Players who finished get remaining lower tags sorted by score asc, tie-break by starting tag asc
+    // - Multiple DNF share highest tags assigned by tie-break starting tag asc
+
+    const checkedTags = scores.map(p => p.tag).sort((a,b) => a - b);
+    const dnfPlayers = scores.filter(p => p.dnf);
+    const finishedPlayers = scores.filter(p => !p.dnf);
+
+    // Assign highest tags to DNF players
+    // Get highest tags equal to number of DNF players
+    const highestTags = checkedTags.slice(-dnfPlayers.length).sort((a,b) => a - b);
+    // Sort DNF players by starting tag asc for tie breaker
+    dnfPlayers.sort((a,b) => a.startingTag - b.startingTag);
+
+    for (let i = 0; i < dnfPlayers.length; i++) {
+      dnfPlayers[i].newTag = highestTags[i];
+    }
+
+    // Remaining tags for finished players
+    const remainingTags = checkedTags.slice(0, checkedTags.length - dnfPlayers.length).sort((a,b) => a - b);
+
+    // Sort finished players by rawScore asc, tie breaker startingTag asc
+    finishedPlayers.sort((a,b) => {
+      if (a.rawScore === b.rawScore) {
+        return a.startingTag - b.startingTag;
+      }
+      return a.rawScore - b.rawScore;
+    });
+
+    for (let i = 0; i < finishedPlayers.length; i++) {
+      finishedPlayers[i].newTag = remainingTags[i];
+    }
+
+    return [...finishedPlayers, ...dnfPlayers];
+  }
+
+  // Save round results, update tags, store history
+  function saveRoundResults(finalScores) {
+    // finalScores: array with newTag assigned, name, tag, rawScore, dnf, startingTag
+
+    // Update playerTags in localStorage to newTag per player
+    const playerTags = JSON.parse(localStorage.getItem('playerTags')) || {};
+    finalScores.forEach(p => {
+      playerTags[p.name] = p.newTag;
+    });
+    localStorage.setItem('playerTags', JSON.stringify(playerTags));
+
+    // Save round history
+    let roundHistory = JSON.parse(localStorage.getItem('roundHistory')) || [];
+    const newRoundRecord = {
+      id: roundData.id,
+      course: roundData.course,
+      par: par,
+      date: new Date().toISOString(),
+      players: finalScores.map(p => ({
+        name: p.name,
+        startingTag: p.tag,
+        finalTag: p.newTag,
+        relScore: p.dnf ? null : (p.rawScore - par),
+        rawScore: p.dnf ? null : p.rawScore,
+        dnf: p.dnf
+      }))
+    };
+    roundHistory.push(newRoundRecord);
+    localStorage.setItem('roundHistory', JSON.stringify(roundHistory));
+  }
+
+  // Handlers
+  document.getElementById('reviewBtn').addEventListener('click', () => {
+    if (showConfirmation()) {
+      document.getElementById('scoresForm').style.display = 'none';
+      document.getElementById('reviewBtn').style.display = 'none';
+      document.getElementById('editBtn').style.display = 'inline-block';
+      document.getElementById('confirmBtn').style.display = 'inline-block';
+    }
+  });
+
+  document.getElementById('editBtn').addEventListener('click', () => {
+    document.getElementById('scoresForm').style.display = 'block';
+    document.getElementById('reviewBtn').style.display = 'inline-block';
+    document.getElementById('editBtn').style.display = 'none';
+    document.getElementById('confirmBtn').style.display = 'none';
+    document.getElementById('confirmationModal').style.display = 'none';
+  });
+
+  document.getElementById('cancelModalBtn').addEventListener('click', () => {
+    document.getElementById('confirmationModal').style.display = 'none';
+  });
+
+  document.getElementById('confirmModalBtn').addEventListener('click', () => {
+    const tbody = document.getElementById('playersTableBody');
+    let finalScores = [];
+
+    players.forEach((p, i) => {
+      const row = tbody.children[i];
+      const relInput = row.querySelector('.rel-score');
+      const dnfCheckbox = row.querySelector('.dnf-checkbox');
+
+      let relScoreRaw = relInput.value.trim();
+      let relScore = parseRelScore(relScoreRaw);
+      let dnf = dnfCheckbox.checked;
+      let rawScore = dnf ? null : (par + (relScore ?? 0));
+
+      finalScores.push({
+        name: p.name,
+        tag: p.tag,
+        startingTag: p.tag,
+        relScore: relScore,
+        rawScore: rawScore,
+        dnf: dnf
+      });
+    });
+
+    // Redistribute tags according to rules
+    const redistributed = redistributeTags(finalScores);
+
+    // Save results and update playerTags
+    saveRoundResults(redistributed);
+
+    alert("Scores saved and tags updated. Returning to check-in.");
+    sessionStorage.removeItem('currentRound');
+    window.location.href = "check-in.html";
+  });
+
+  // On page load
+  loadRound();
+</script>
+</body>
+</html>

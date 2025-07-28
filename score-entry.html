@@ -2,133 +2,312 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Enter Scores</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Submit Scores</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    h1 { margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    input[type="text"] { width: 60px; text-align: center; }
-    .summary { display: none; margin-top: 30px; }
-    .btn-group { margin-top: 20px; }
-    button { padding: 8px 16px; margin-right: 10px; }
+    input[type="text"] { width: 60px; padding: 5px; text-align: center; }
+    .dnf-checkbox { width: 20px; height: 20px; }
+    #confirmSection { margin-top: 20px; }
+    button { padding: 10px 20px; margin-right: 10px; }
+    #leaderboard { margin-top: 30px; }
   </style>
 </head>
 <body>
-  <h1>Enter Final Scores</h1>
-  <div id="courseInfo"></div>
-  <table id="scoreTable">
-    <thead>
-      <tr>
-        <th>Player</th>
-        <th>Tag</th>
-        <th>Relative to Par</th>
-        <th>Raw Score</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <div class="btn-group">
-    <button onclick="reviewScores()">Submit Scores</button>
-  </div>
-
-  <div class="summary" id="scoreSummary">
-    <h2>Review Scores</h2>
+  <h1>Submit Scores</h1>
+  <div id="roundInfo"></div>
+  <form id="scoreForm">
     <table>
       <thead>
-        <tr><th>Player</th><th>Tag</th><th>Relative</th><th>Raw</th></tr>
+        <tr>
+          <th>Start Tag</th>
+          <th>Player</th>
+          <th>Score (± relative to Par)</th>
+          <th>DNF</th>
+          <th>Raw Score</th>
+        </tr>
       </thead>
-      <tbody id="summaryTable"></tbody>
+      <tbody id="playersTableBody"></tbody>
     </table>
-    <div class="btn-group">
-      <button onclick="confirmScores()">Confirm Scores</button>
-      <button onclick="cancelReview()">Edit Scores</button>
-    </div>
+    <button type="button" id="previewBtn">Preview Scores</button>
+  </form>
+
+  <div id="confirmSection" style="display:none;">
+    <h2>Confirm Scores</h2>
+    <table id="confirmTable">
+      <thead>
+        <tr>
+          <th>New Tag</th>
+          <th>Player</th>
+          <th>Score</th>
+          <th>DNF</th>
+        </tr>
+      </thead>
+      <tbody id="confirmTableBody"></tbody>
+    </table>
+    <button id="editBtn">Edit Scores</button>
+    <button id="confirmBtn">Confirm Scores</button>
+  </div>
+
+  <div id="leaderboard" style="display:none;">
+    <h2>Leaderboard (Tags Updated)</h2>
+    <table>
+      <thead>
+        <tr><th>Tag</th><th>Player</th><th>Score</th></tr>
+      </thead>
+      <tbody id="leaderboardBody"></tbody>
+    </table>
+    <button id="returnHomeBtn">OK</button>
   </div>
 
   <script>
-    const roundData = JSON.parse(sessionStorage.getItem('currentRound'));
-    const tbody = document.querySelector('#scoreTable tbody');
-    const courseInfo = document.getElementById('courseInfo');
-    courseInfo.textContent = `Course: ${roundData.course} | Par: ${roundData.par} | Round ID: ${roundData.id}`;
-
-    roundData.players.forEach(player => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${player.name}</td>
-        <td>${player.tag}</td>
-        <td><input type="text" data-name="${player.name}" placeholder="+2, -1, E" oninput="updateRawScore(this)"></td>
-        <td id="raw-${player.name}"></td>
-      `;
-      tbody.appendChild(row);
-    });
-
-    function updateRawScore(input) {
-      const rel = input.value.trim().toUpperCase();
-      const cell = document.getElementById(`raw-${input.dataset.name}`);
-      const par = parseInt(roundData.par);
-      let raw;
-
-      if (rel === 'E') raw = par;
-      else if (/^[+-]?\d+$/.test(rel)) raw = par + parseInt(rel);
-      else { cell.textContent = '?'; return; }
-
-      cell.textContent = raw;
+    // Helper: format name to "Title Case"
+    function formatName(name) {
+      return name.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
     }
 
-    function reviewScores() {
-      const inputs = document.querySelectorAll('input');
-      const summaryBody = document.getElementById('summaryTable');
-      summaryBody.innerHTML = '';
+    // Parse relative score string to numeric value (E = 0)
+    function parseRelScore(scoreStr) {
+      scoreStr = scoreStr.trim().toUpperCase();
+      if(scoreStr === 'E') return 0;
+      let num = Number(scoreStr);
+      if (!isNaN(num)) return num;
+      if(scoreStr.startsWith('+')) return Number(scoreStr.slice(1)) || 0;
+      if(scoreStr.startsWith('-')) return Number(scoreStr) || 0;
+      return NaN;
+    }
 
-      roundData.players.forEach(player => {
-        const input = document.querySelector(`input[data-name="${player.name}"]`);
-        const rel = input.value.trim().toUpperCase();
-        const rawCell = document.getElementById(`raw-${player.name}`);
-        const raw = parseInt(rawCell.textContent);
+    // Format numeric score to relative string
+    function formatRelScore(num) {
+      if(num === 0) return 'E';
+      return (num > 0 ? '+' : '') + num;
+    }
 
-        if (!rel || isNaN(raw)) {
-          const confirm = confirm(`No valid score entered for ${player.name}. Did they not finish?`);
-          if (confirm) {
-            player.dnf = true;
-            player.relativeScore = 'DNF';
-            player.rawScore = null;
-          } else {
-            alert('Please return and enter a valid score.');
+    // Load current round from sessionStorage
+    const roundData = JSON.parse(sessionStorage.getItem("currentRound"));
+    if (!roundData) {
+      alert("No round data found. Please check-in first.");
+      window.location.href = "check-in.html";
+    }
+
+    const par = roundData.par;
+    const players = roundData.players;
+
+    // Sort players by starting tag ascending for display order
+    players.sort((a,b) => a.tag - b.tag);
+
+    // Populate round info
+    document.getElementById('roundInfo').textContent = `Course: ${roundData.course} | Par: ${par}`;
+
+    const playersTableBody = document.getElementById('playersTableBody');
+    players.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${p.tag}</td>
+        <td>${formatName(p.name)}</td>
+        <td><input type="text" class="relScoreInput" placeholder="E, +0, -2" /></td>
+        <td><input type="checkbox" class="dnfCheckbox" /></td>
+        <td class="rawScoreCell"></td>
+      `;
+      playersTableBody.appendChild(tr);
+    });
+
+    // Elements
+    const previewBtn = document.getElementById('previewBtn');
+    const confirmSection = document.getElementById('confirmSection');
+    const confirmTableBody = document.getElementById('confirmTableBody');
+    const scoreForm = document.getElementById('scoreForm');
+    const editBtn = document.getElementById('editBtn');
+    const confirmBtn = document.getElementById('confirmBtn');
+    const leaderboardDiv = document.getElementById('leaderboard');
+    const leaderboardBody = document.getElementById('leaderboardBody');
+    const returnHomeBtn = document.getElementById('returnHomeBtn');
+
+    // Update raw score live on input change
+    playersTableBody.addEventListener('input', e => {
+      if(e.target.classList.contains('relScoreInput')) {
+        const tr = e.target.closest('tr');
+        const relScoreStr = e.target.value;
+        const relScoreNum = parseRelScore(relScoreStr);
+        const rawScoreCell = tr.querySelector('.rawScoreCell');
+        if (isNaN(relScoreNum)) {
+          rawScoreCell.textContent = '';
+          rawScoreCell.style.color = 'red';
+        } else {
+          rawScoreCell.textContent = par + relScoreNum;
+          rawScoreCell.style.color = 'black';
+        }
+      }
+    });
+
+    // Preview button click
+    previewBtn.addEventListener('click', () => {
+      const rows = [...playersTableBody.querySelectorAll('tr')];
+      let valid = true;
+      const scoreData = [];
+
+      rows.forEach((tr, idx) => {
+        const name = tr.cells[1].textContent;
+        const tag = Number(tr.cells[0].textContent);
+        const relScoreInput = tr.querySelector('.relScoreInput');
+        const dnfCheckbox = tr.querySelector('.dnfCheckbox');
+        const rawScoreCell = tr.querySelector('.rawScoreCell');
+
+        const relScoreStr = relScoreInput.value.trim();
+        const isDnf = dnfCheckbox.checked;
+
+        if(!isDnf) {
+          if(!relScoreStr) {
+            alert(`Enter a relative score or check DNF for player: ${name}`);
+            valid = false;
+            return;
+          }
+          if(isNaN(parseRelScore(relScoreStr))) {
+            alert(`Invalid relative score format for player: ${name}`);
+            valid = false;
             return;
           }
         } else {
-          player.relativeScore = rel;
-          player.rawScore = raw;
-          player.dnf = false;
+          // If DNF checked, clear score inputs
+          relScoreInput.value = '';
+          rawScoreCell.textContent = '';
         }
 
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${player.name}</td>
-          <td>${player.tag}</td>
-          <td>${player.relativeScore}</td>
-          <td>${player.rawScore ?? '-'}</td>
-        `;
-        summaryBody.appendChild(row);
+        scoreData.push({
+          name,
+          startTag: tag,
+          relScoreStr: isDnf ? null : relScoreStr,
+          relScoreNum: isDnf ? null : parseRelScore(relScoreStr),
+          isDnf
+        });
       });
 
-      document.getElementById('scoreSummary').style.display = 'block';
-    }
+      if(!valid) return;
 
-    function confirmScores() {
-      let rounds = JSON.parse(localStorage.getItem('rounds')) || [];
-      roundData.timestamp = new Date().toISOString();
-      rounds.push(roundData);
-      localStorage.setItem('rounds', JSON.stringify(rounds));
-      alert('Scores saved!');
-      window.location.href = 'leaderboard.html';
-    }
+      // Sort and redistribute tags based on logic:
 
-    function cancelReview() {
-      document.getElementById('scoreSummary').style.display = 'none';
-    }
+      // Separate finishers and DNFs
+      const finishers = scoreData.filter(p => !p.isDnf);
+      const dnfs = scoreData.filter(p => p.isDnf);
+
+      // Sort finishers by relative score ascending, then startTag ascending
+      finishers.sort((a,b) => {
+        if(a.relScoreNum === b.relScoreNum) return a.startTag - b.startTag;
+        return a.relScoreNum - b.relScoreNum;
+      });
+
+      // Sort DNFs by startTag ascending (for tie-break)
+      dnfs.sort((a,b) => a.startTag - b.startTag);
+
+      // All tags checked in for the round, sorted ascending
+      const allTags = scoreData.map(p => p.startTag).sort((a,b) => a - b);
+
+      // Assign highest tags to DNFs descending
+      let highestTags = allTags.slice(-dnfs.length).sort((a,b) => b - a);
+
+      dnfs.forEach((p,i) => {
+        p.newTag = highestTags[i];
+      });
+
+      // Remaining tags assigned to finishers from lowest available tags
+      const usedTags = highestTags;
+      const availableTags = allTags.filter(t => !usedTags.includes(t));
+
+      finishers.forEach((p,i) => {
+        p.newTag = availableTags[i];
+      });
+
+      // Combine and sort by newTag ascending for confirmation display
+      const combined = [...finishers, ...dnfs];
+      combined.sort((a,b) => a.newTag - b.newTag);
+
+      // Show confirm table
+      confirmTableBody.innerHTML = '';
+      combined.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.newTag}</td>
+          <td>${p.name}</td>
+          <td>${p.isDnf ? '-' : formatRelScore(p.relScoreNum)}</td>
+          <td>${p.isDnf ? 'Yes' : 'No'}</td>
+        `;
+        confirmTableBody.appendChild(tr);
+      });
+
+      // Store combined for confirm step
+      window.combinedScoreData = combined;
+
+      // Hide form, show confirm section
+      scoreForm.style.display = 'none';
+      confirmSection.style.display = 'block';
+      leaderboardDiv.style.display = 'none';
+    });
+
+    // Edit button: go back to form
+    editBtn.addEventListener('click', () => {
+      confirmSection.style.display = 'none';
+      scoreForm.style.display = 'block';
+      leaderboardDiv.style.display = 'none';
+    });
+
+    // Confirm button: save scores, update tags, show leaderboard
+    confirmBtn.addEventListener('click', () => {
+      const combined = window.combinedScoreData;
+      if (!combined) return alert("No score data to confirm.");
+
+      // Save round results in localStorage roundHistory
+      const roundHistory = JSON.parse(localStorage.getItem('roundHistory') || '[]');
+
+      // Create round record with scores and tag updates
+      const roundRecord = {
+        id: roundData.id,
+        course: roundData.course,
+        par: par,
+        date: new Date().toISOString(),
+        players: combined.map(p => ({
+          name: p.name,
+          startTag: p.startTag,
+          newTag: p.newTag,
+          scoreRel: p.relScoreNum,
+          scoreStr: p.isDnf ? 'DNF' : formatRelScore(p.relScoreNum),
+          isDnf: p.isDnf
+        }))
+      };
+
+      roundHistory.push(roundRecord);
+      localStorage.setItem('roundHistory', JSON.stringify(roundHistory));
+
+      // Update playerTags in localStorage with newTag for all players
+      const playerTags = JSON.parse(localStorage.getItem('playerTags') || '{}');
+      combined.forEach(p => {
+        playerTags[p.name] = p.newTag;
+      });
+      localStorage.setItem('playerTags', JSON.stringify(playerTags));
+
+      // Show leaderboard with updated tags and scores
+      leaderboardBody.innerHTML = '';
+      combined.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${p.newTag}</td>
+          <td>${p.name}</td>
+          <td>${p.isDnf ? 'DNF' : formatRelScore(p.relScoreNum)}</td>
+        `;
+        leaderboardBody.appendChild(tr);
+      });
+
+      confirmSection.style.display = 'none';
+      leaderboardDiv.style.display = 'block';
+    });
+
+    // Return Home button: clear current round and go to check-in
+    returnHomeBtn.addEventListener('click', () => {
+      sessionStorage.removeItem("currentRound");
+      window.location.href = "check-in.html";
+    });
   </script>
 </body>
 </html>

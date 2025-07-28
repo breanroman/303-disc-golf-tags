@@ -1,209 +1,414 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Disc Golf Tag Group Check-In</title>
-<style>
-  body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-  label { display: block; margin-top: 10px; }
-  input, select, button { margin-top: 5px; padding: 8px; width: 100%; max-width: 300px; }
-  .player-entry { margin-bottom: 15px; }
-  .error { color: red; }
-  #players-container > div { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px; }
-  #add-player { margin-top: 10px; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Check In Players</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    h1 { margin-bottom: 20px; }
+    .player-input { margin-bottom: 10px; }
+    input[type="text"], input[type="number"], select { padding: 5px; width: 200px; }
+    button { padding: 8px 16px; margin-top: 10px; }
+    .course-input { margin-top: 20px; margin-bottom: 20px; }
+    #playerInputs { margin-bottom: 10px; }
+    
+    /* Modal Styles */
+    #conflictModal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0; top: 0; width: 100%; height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.5);
+    }
+    #conflictModalContent {
+      background: #fff;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 800px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    #conflictModal h2 {
+      margin-top: 0;
+    }
+    .conflict-group {
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .conflict-row {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .conflict-row > div {
+      flex: 1;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .modal-buttons {
+      text-align: right;
+      margin-top: 20px;
+    }
+    .modal-buttons button {
+      margin-left: 10px;
+    }
+    .error {
+      color: red;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+  </style>
 </head>
 <body>
+  <h1>Check In Players</h1>
+  <div id="playerInputs"></div>
+  <button onclick="addPlayerInput()">+ Add Player</button>
 
-<h1>Disc Golf Tag Group Check-In</h1>
+  <datalist id="playerList"></datalist>
 
-<form id="checkin-form">
-
-  <label for="course">Course Name:</label>
-  <input list="courses" id="course" name="course" autocomplete="off" required />
-  <datalist id="courses">
-    <!-- Example courses -->
-    <option value="Bird Park"></option>
-    <option value="Maple Grove"></option>
-  </datalist>
-
-  <label for="par">Today's Par:</label>
-  <input type="number" id="par" name="par" min="1" max="150" required />
-
-  <div id="players-container">
-    <!-- Player inputs will go here -->
+  <div class="course-input">
+    <label for="courseName">Course Name:</label>
+    <input type="text" id="courseName" placeholder="Enter course name" />
+    <label for="par">Today's Par:</label>
+    <input type="number" id="par" placeholder="Par" />
   </div>
 
-  <button type="button" id="add-player">+ Add Player</button>
+  <div>
+    <button onclick="startRound()">Start Round</button>
+  </div>
 
-  <br /><br />
-  <button type="submit">Start Round</button>
-</form>
+  <!-- Modal for conflict resolution -->
+  <div id="conflictModal">
+    <div id="conflictModalContent">
+      <h2>Duplicate Tag Conflict Detected</h2>
+      <p>Please resolve the conflicting player names and/or assign unique tags.</p>
+      <div id="conflictContainer"></div>
+      <div class="error" id="conflictError" style="display:none;"></div>
+      <div class="modal-buttons">
+        <button onclick="cancelConflict()">Cancel</button>
+        <button onclick="resolveConflicts()">Resolve & Continue</button>
+      </div>
+    </div>
+  </div>
 
-<div id="status"></div>
+  <script>
+    let playerCount = 0;
+    const MAX_PLAYERS = 20;
 
-<script>
-  // Simulated database for players, tags, courses, and rounds
-  let playersDB = [
-    { name: 'Abe', tag: 1, lastPlayed: '2025-07-20' },
-    { name: 'Bob', tag: 2, lastPlayed: '2025-07-22' },
-    { name: 'Charlie', tag: 3, lastPlayed: '2025-07-18' }
-  ];
-  let coursesDB = [
-    { name: 'Bird Park', pars: [54] },
-    { name: 'Maple Grove', pars: [58, 60] }
-  ];
+    function addPlayerInput(name = '') {
+      if (playerCount >= MAX_PLAYERS) return alert("Maximum players reached.");
+      playerCount++;
+      const div = document.createElement('div');
+      div.className = 'player-input';
+      div.innerHTML = `
+        <input type="text" placeholder="Player Name" class="player-name" list="playerList" value="${name}" />
+      `;
+      document.getElementById('playerInputs').appendChild(div);
+    }
 
-  // Max number of players per round
-  const MAX_PLAYERS = 20;
+    function formatName(name) {
+      return name.trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
 
-  // Utility to format name (capitalize each word)
-  function formatName(str) {
-    return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-  }
+    function loadPlayerList() {
+      const playerTags = JSON.parse(localStorage.getItem("playerTags")) || {};
+      const datalist = document.getElementById("playerList");
+      datalist.innerHTML = '';
+      Object.keys(playerTags).forEach(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        datalist.appendChild(option);
+      });
+    }
 
-  // Add a player input row dynamically
-  function addPlayerInput(value = '') {
-    const container = document.getElementById('players-container');
-    if (container.children.length >= MAX_PLAYERS) return;
+    // Get all tags currently in use by the group
+    function getAllUsedTags() {
+      const playerTags = JSON.parse(localStorage.getItem("playerTags")) || {};
+      return Object.values(playerTags).map(t => parseInt(t)).filter(n => !isNaN(n));
+    }
 
-    const div = document.createElement('div');
-    div.className = 'player-entry';
-
-    const label = document.createElement('label');
-    label.textContent = `Player ${container.children.length + 1}:`;
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.name = 'player';
-    input.autocomplete = 'off';
-    input.value = value;
-    input.placeholder = 'Enter player name';
-    input.required = container.children.length < 3; // at least 3 required
-
-    // Autocomplete behavior: suggest matching players
-    input.addEventListener('input', e => {
-      const val = e.target.value.toLowerCase();
-      // Simple autocomplete suggestions (could be improved with datalist or a dropdown)
-      const matches = playersDB.filter(p => p.name.toLowerCase().includes(val));
-      if (matches.length === 1 && val === matches[0].name.toLowerCase()) {
-        e.target.value = matches[0].name; // fix case
+    function getAvailableTags(usedTags, assignedTags) {
+      const maxTag = usedTags.length ? Math.max(...usedTags) : 0;
+      const assignedSet = new Set(assignedTags);
+      let available = [];
+      for (let i = 1; i <= maxTag; i++) {
+        if (!assignedSet.has(i)) available.push(i);
       }
-    });
-
-    // Format name on blur
-    input.addEventListener('blur', e => {
-      e.target.value = formatName(e.target.value.trim());
-    });
-
-    div.appendChild(label);
-    div.appendChild(input);
-    container.appendChild(div);
-  }
-
-  // Initialize with 5 empty player inputs
-  for (let i = 0; i < 5; i++) addPlayerInput();
-
-  // Add player button
-  document.getElementById('add-player').addEventListener('click', () => {
-    addPlayerInput();
-  });
-
-  // Handle course selection change to autopopulate par
-  document.getElementById('course').addEventListener('change', e => {
-    const courseName = e.target.value.trim();
-    const course = coursesDB.find(c => c.name.toLowerCase() === courseName.toLowerCase());
-    const parInput = document.getElementById('par');
-    if (course) {
-      // Use last par if available
-      parInput.value = course.pars[course.pars.length - 1] || '';
-    } else {
-      parInput.value = '';
-    }
-  });
-
-  // Helper: get next tag for new player
-  function getNextTag() {
-    if (playersDB.length === 0) return 1;
-    return Math.max(...playersDB.map(p => p.tag)) + 1;
-  }
-
-  // On form submit
-  document.getElementById('checkin-form').addEventListener('submit', e => {
-    e.preventDefault();
-    const courseName = document.getElementById('course').value.trim();
-    const par = Number(document.getElementById('par').value);
-    if (!courseName || !par) {
-      alert('Please enter course and par.');
-      return;
+      return available;
     }
 
-    // Gather players entered (skip empty)
-    const playerInputs = Array.from(document.querySelectorAll('input[name="player"]'));
-    const enteredNames = playerInputs
-      .map(input => formatName(input.value.trim()))
-      .filter(name => name !== '');
-
-    if (enteredNames.length === 0) {
-      alert('Please enter at least one player.');
-      return;
+    // Validate no empty names, format names consistently
+    function gatherPlayers() {
+      const nameInputs = document.querySelectorAll('.player-name');
+      let players = [];
+      for (const input of nameInputs) {
+        const rawName = input.value;
+        if (rawName.trim() === '') continue; // Skip empty inputs silently
+        const name = formatName(rawName);
+        players.push({ originalInput: input, name: name });
+      }
+      return players;
     }
 
-    // Assign tags and detect conflicts
-    let assignedPlayers = [];
-    let conflict = false;
-    let conflicts = [];
+    // Detect duplicate tags among the selected players
+    function findDuplicateTags(tagAssignments, players) {
+      const tagToPlayers = {};
+      for (const player of players) {
+        const tag = tagAssignments[player.name];
+        if (!tag) continue;
+        if (!tagToPlayers[tag]) tagToPlayers[tag] = [];
+        tagToPlayers[tag].push(player);
+      }
+      // Filter to only tags with duplicates
+      const duplicates = {};
+      for (const tag in tagToPlayers) {
+        if (tagToPlayers[tag].length > 1) {
+          duplicates[tag] = tagToPlayers[tag];
+        }
+      }
+      return duplicates;
+    }
 
-    enteredNames.forEach(name => {
-      let player = playersDB.find(p => p.name.toLowerCase() === name.toLowerCase());
-      if (player) {
-        assignedPlayers.push({ name, tag: player.tag });
+    function startRound() {
+      const players = gatherPlayers();
+      if (players.length === 0) return alert("Please enter at least one player.");
+
+      const course = document.getElementById('courseName').value.trim();
+      const par = parseInt(document.getElementById('par').value);
+      if (!course || isNaN(par)) return alert("Please enter a valid course and par.");
+
+      let tagAssignments = JSON.parse(localStorage.getItem("playerTags")) || {};
+      // Assign tags to new players (if they don't have a tag)
+      const usedTags = getAllUsedTags();
+
+      for (const player of players) {
+        if (!tagAssignments[player.name]) {
+          // Assign lowest unused tag or maxTag+1
+          const assignedTags = Object.values(tagAssignments).map(t => parseInt(t));
+          const availableTags = getAvailableTags(usedTags, assignedTags);
+          if (availableTags.length > 0) {
+            tagAssignments[player.name] = availableTags[0];
+          } else {
+            tagAssignments[player.name] = (usedTags.length ? Math.max(...usedTags) : 0) + 1;
+          }
+        }
+      }
+
+      // Detect duplicates
+      const duplicates = findDuplicateTags(tagAssignments, players);
+      if (Object.keys(duplicates).length > 0) {
+        // Show modal to resolve duplicates
+        openConflictModal(duplicates, tagAssignments, players);
       } else {
-        // New player: assign new tag
-        let newTag = getNextTag();
-        assignedPlayers.push({ name, tag: newTag });
-        // Add new player to DB for next rounds
-        playersDB.push({ name, tag: newTag, lastPlayed: new Date().toISOString().slice(0, 10) });
+        // No conflicts - proceed with save and redirect
+        saveRoundAndContinue(players, tagAssignments, course, par);
       }
-    });
-
-    // Check for duplicate tags in this round
-    let tagsUsed = new Set();
-    assignedPlayers.forEach(p => {
-      if (tagsUsed.has(p.tag)) {
-        conflict = true;
-        conflicts.push(p.tag);
-      } else {
-        tagsUsed.add(p.tag);
-      }
-    });
-
-    if (conflict) {
-      alert('Tag conflict detected for tag(s): ' + conflicts.join(', ') + '. Please check player entries.');
-      return;
     }
 
-    // Create round ID: YYYYMMDDHHmm + first 4 letters of course uppercased
-    let now = new Date();
-    let pad = n => n.toString().padStart(2, '0');
-    let roundId = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${courseName.substring(0, 4).toUpperCase()}`;
+    // Modal logic
+    function openConflictModal(duplicates, tagAssignments, players) {
+      const container = document.getElementById('conflictContainer');
+      container.innerHTML = ''; // Clear old
 
-    // Store round data in localStorage
-    let rounds = JSON.parse(localStorage.getItem('rounds') || '[]');
-    rounds.push({
-      roundId,
-      courseName,
-      par,
-      players: assignedPlayers,
-      date: now.toISOString()
-    });
-    localStorage.setItem('rounds', JSON.stringify(rounds));
+      const usedTags = getAllUsedTags();
+      // Gather all tags assigned to players currently checked in (to avoid duplicate tag options)
+      const assignedTags = players.map(p => tagAssignments[p.name]);
+      
+      for (const tag in duplicates) {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'conflict-group';
 
-    // Show confirmation & redirect to scores page
-    alert(`Round started! ID: ${roundId}\nPlayers and tags assigned.\nYou will now be redirected to the score entry page.`);
-    window.location.href = `score-entry.html?roundId=${roundId}`;
-  });
-</script>
+        const header = document.createElement('h3');
+        header.textContent = `Tag #${tag} assigned to multiple players`;
+        groupDiv.appendChild(header);
+
+        duplicates[tag].forEach((player, idx) => {
+          const row = document.createElement('div');
+          row.className = 'conflict-row';
+
+          // Player name editable
+          const nameDiv = document.createElement('div');
+          const nameLabel = document.createElement('label');
+          nameLabel.textContent = `Player Name ${idx+1}:`;
+          const nameInput = document.createElement('input');
+          nameInput.type = 'text';
+          nameInput.value = player.name;
+          nameInput.className = 'conflict-player-name';
+          nameInput.dataset.originalName = player.name; // keep original for reference
+          nameDiv.appendChild(nameLabel);
+          nameDiv.appendChild(nameInput);
+
+          // Tag select dropdown
+          const tagDiv = document.createElement('div');
+          const tagLabel = document.createElement('label');
+          tagLabel.textContent = 'Assign Tag:';
+          const tagSelect = document.createElement('select');
+          tagSelect.className = 'conflict-player-tag';
+
+          // For options, tags currently in use in group but NOT assigned to other conflict players in this group
+          // First gather tags assigned to this conflict group (excluding current player's tag to allow reassign)
+          const conflictGroupTags = duplicates[tag].map(p => tagAssignments[p.name]);
+          // Gather all assigned tags in conflict group except current player tag
+          const otherTagsInGroup = new Set(conflictGroupTags.filter(t => t !== tagAssignments[player.name]));
+
+          // Possible tags for selection: All tags in usedTags EXCLUDING tags assigned in this conflict group (except current tag)
+          const availableTags = usedTags.filter(t => !otherTagsInGroup.has(t));
+
+          availableTags.sort((a,b) => a-b).forEach(t => {
+            const option = document.createElement('option');
+            option.value = t;
+            option.textContent = t;
+            if (t === tagAssignments[player.name]) option.selected = true;
+            tagSelect.appendChild(option);
+          });
+
+          tagDiv.appendChild(tagLabel);
+          tagDiv.appendChild(tagSelect);
+
+          row.appendChild(nameDiv);
+          row.appendChild(tagDiv);
+
+          groupDiv.appendChild(row);
+        });
+
+        container.appendChild(groupDiv);
+      }
+
+      // Show modal
+      document.getElementById('conflictModal').style.display = 'block';
+      document.getElementById('conflictError').style.display = 'none';
+    }
+
+    function cancelConflict() {
+      // Close modal, do nothing
+      document.getElementById('conflictModal').style.display = 'none';
+    }
+
+    function resolveConflicts() {
+      const conflictError = document.getElementById('conflictError');
+      conflictError.style.display = 'none';
+
+      // Collect inputs from modal
+      const conflictGroups = document.querySelectorAll('.conflict-group');
+
+      // New map of names to tags (updated)
+      const updatedTagAssignments = {...JSON.parse(localStorage.getItem("playerTags")) || {}};
+      const seenTags = new Set();
+
+      // Collect all players checked in now (for validation)
+      const players = gatherPlayers();
+
+      // We'll rebuild player -> tag mapping with conflict fixes, and validate no duplicates remain
+      for (const group of conflictGroups) {
+        const rows = group.querySelectorAll('.conflict-row');
+        for (const row of rows) {
+          const nameInput = row.querySelector('.conflict-player-name');
+          const tagSelect = row.querySelector('.conflict-player-tag');
+
+          const newNameRaw = nameInput.value.trim();
+          if (!newNameRaw) {
+            conflictError.textContent = "Player names cannot be empty.";
+            conflictError.style.display = 'block';
+            return;
+          }
+          const newName = formatName(newNameRaw);
+          const newTag = parseInt(tagSelect.value);
+
+          if (seenTags.has(newTag)) {
+            conflictError.textContent = `Tag #${newTag} assigned to multiple players. Please fix.`;
+            conflictError.style.display = 'block';
+            return;
+          }
+          seenTags.add(newTag);
+
+          // Update tag assignment in the temp map
+          updatedTagAssignments[newName] = newTag;
+
+          // If original name changed, remove old mapping if different name
+          const originalName = nameInput.dataset.originalName;
+          if (originalName !== newName) {
+            delete updatedTagAssignments[originalName];
+          }
+        }
+      }
+
+      // Now verify no conflicts outside modal (duplicate tags between resolved conflicts and other players)
+      const playersNames = players.map(p => p.name);
+      for (const pName of playersNames) {
+        if (!(pName in updatedTagAssignments)) {
+          conflictError.textContent = `Player "${pName}" does not have a tag assigned after conflict resolution.`;
+          conflictError.style.display = 'block';
+          return;
+        }
+      }
+
+      // Check for any duplicate tags overall now
+      const tagCount = {};
+      for (const name in updatedTagAssignments) {
+        const tag = updatedTagAssignments[name];
+        tagCount[tag] = (tagCount[tag] || 0) + 1;
+        if (tagCount[tag] > 1) {
+          conflictError.textContent = `Duplicate tag #${tag} still exists after resolution.`;
+          conflictError.style.display = 'block';
+          return;
+        }
+      }
+
+      // All good - save back to localStorage
+      localStorage.setItem("playerTags", JSON.stringify(updatedTagAssignments));
+
+      // Also update player inputs with any name changes
+      const nameInputs = document.querySelectorAll('.player-name');
+      nameInputs.forEach(input => {
+        const currentName = formatName(input.value);
+        if (currentName && updatedTagAssignments[currentName]) {
+          input.value = currentName;
+        }
+      });
+
+      // Close modal
+      document.getElementById('conflictModal').style.display = 'none';
+
+      // Proceed with saving and redirecting
+      const course = document.getElementById('courseName').value.trim();
+      const par = parseInt(document.getElementById('par').value);
+      saveRoundAndContinue(players, updatedTagAssignments, course, par);
+    }
+
+    function saveRoundAndContinue(players, tagAssignments, course, par) {
+      // Build players array with tags for storage
+      const playersData = players.map(p => ({
+        name: p.name,
+        tag: tagAssignments[p.name]
+      }));
+
+      const roundId = new Date().toISOString().slice(0,16).replace(/[-:T]/g, '') + course.slice(0,4).toUpperCase();
+      const roundData = {
+        id: roundId,
+        course: course,
+        par: par,
+        players: playersData
+      };
+
+      sessionStorage.setItem("currentRound", JSON.stringify(roundData));
+      localStorage.setItem("playerTags", JSON.stringify(tagAssignments));
+
+      window.location.href = "score-entry.html";
+    }
+
+    // Initial setup
+    for (let i = 0; i < 5; i++) addPlayerInput();
+    loadPlayerList();
+
+  </script>
 </body>
 </html>

@@ -2,41 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Disc Golf Tags App</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Disc Golf Tag Tracker - Home</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 400px;
+      margin: 50px auto;
+      padding: 0 20px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 30px;
+    }
+    nav a {
+      display: block;
+      margin: 15px 0;
+      padding: 12px 20px;
+      background-color: #007BFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 1.1em;
+      transition: background-color 0.3s ease;
+    }
+    nav a:hover {
+      background-color: #0056b3;
+    }
+    footer {
+      margin-top: 50px;
+      color: #555;
+      font-size: 0.9em;
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Disc Golf Tags Tracker</h1>
-    <nav>
-      <a href="checkin.html">Check-In</a> |
-      <a href="rounds.html">Past Rounds</a> |
-      <a href="tag-history.html">Full Tag Order</a>
-    </nav>
-  </header>
-
-  <section>
-    <h2>Welcome</h2>
-    <p>This tool helps our disc golf group manage tag rounds, player check-ins, score tracking, and tag history. You can:</p>
-    <ul>
-      <li>Check in up to 20 players and start a new round</li>
-      <li>Track who holds which tag in real time</li>
-      <li>Store past round data and update tags automatically</li>
-      <li>See leaderboards and tag history anytime</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>🏆 Current Leaderboard</h2>
-    <div id="leaderboard">
-      <p>Loading...</p>
-    </div>
-  </section>
-
+  <h1>Disc Golf Tag Tracker</h1>
+  <nav>
+    <a href="check-in.html">Player Check-In</a>
+    <a href="score-entry.html">Submit Scores</a>
+    <a href="tag-group.html">Tag Group Leaderboard</a>
+  </nav>
   <footer>
-    <p>Built for our local disc golf crew. ⛳</p>
+    &copy; 2025 Disc Golf Tag Tracker
   </footer>
-
-  <script src="js/index.js"></script>
 </body>
 </html>

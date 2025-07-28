@@ -1,14 +1,138 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Tag Group Leaderboard</title>
-  <link rel="stylesheet" href="css/styles.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tag Group Leaderboard</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 0 15px; }
+  h1 { text-align: center; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+  input[type="text"], input[type="number"] {
+    width: 90%;
+    box-sizing: border-box;
+    padding: 5px;
+    text-align: center;
+  }
+  button { padding: 10px 20px; display: block; margin: 10px auto; }
+  #errorMsg {
+    color: red;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+</style>
 </head>
 <body>
-  <header>
-    <h1>Tag Group Leaderboard</h1>
-    <nav>
-      <a href="index.html">Home</a> |
-      <a href="checkin.html">Check-In</a> |
-      <a href="score-entry.html">Sco
+
+<h1>Tag Group Leaderboard</h1>
+
+<div id="errorMsg"></div>
+
+<table id="tagGroupTable">
+  <thead>
+    <tr>
+      <th>Tag</th>
+      <th>Player Name</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<button id="saveBtn">Save Changes</button>
+
+<script>
+  const errorMsg = document.getElementById('errorMsg');
+  const tbody = document.querySelector('#tagGroupTable tbody');
+  const saveBtn = document.getElementById('saveBtn');
+
+  // Load playerTags from localStorage
+  function loadPlayerTags() {
+    let playerTags = JSON.parse(localStorage.getItem('playerTags')) || {};
+    // Convert object to array [{name, tag}]
+    let playersArray = Object.entries(playerTags).map(([name, tag]) => ({ name, tag }));
+    // Sort by tag ascending
+    playersArray.sort((a, b) => a.tag - b.tag);
+    return playersArray;
+  }
+
+  // Render table rows with editable inputs
+  function renderTable(players) {
+    tbody.innerHTML = '';
+    players.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="number" min="1" value="${p.tag}" class="tag-input" /></td>
+        <td><input type="text" value="${p.name}" class="name-input" /></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Validate for duplicate tags or empty fields
+  function validateInputs() {
+    errorMsg.textContent = '';
+    const tags = [];
+    const names = [];
+
+    const tagInputs = tbody.querySelectorAll('.tag-input');
+    const nameInputs = tbody.querySelectorAll('.name-input');
+
+    for (let i = 0; i < tagInputs.length; i++) {
+      const tagVal = parseInt(tagInputs[i].value, 10);
+      const nameVal = nameInputs[i].value.trim();
+
+      if (!nameVal) {
+        errorMsg.textContent = "Player names cannot be empty.";
+        return false;
+      }
+      if (isNaN(tagVal) || tagVal < 1) {
+        errorMsg.textContent = "Tags must be integers greater than 0.";
+        return false;
+      }
+      if (tags.includes(tagVal)) {
+        errorMsg.textContent = `Duplicate tag found: ${tagVal}. Tags must be unique.`;
+        return false;
+      }
+      tags.push(tagVal);
+      names.push(nameVal);
+    }
+    return true;
+  }
+
+  // Save changes back to localStorage
+  function saveChanges() {
+    if (!validateInputs()) return;
+
+    const tagInputs = tbody.querySelectorAll('.tag-input');
+    const nameInputs = tbody.querySelectorAll('.name-input');
+
+    const newPlayerTags = {};
+    for (let i = 0; i < tagInputs.length; i++) {
+      const tagVal = parseInt(tagInputs[i].value, 10);
+      const nameVal = nameInputs[i].value.trim();
+      newPlayerTags[nameVal] = tagVal;
+    }
+
+    localStorage.setItem('playerTags', JSON.stringify(newPlayerTags));
+    errorMsg.style.color = 'green';
+    errorMsg.textContent = 'Changes saved successfully!';
+    setTimeout(() => {
+      errorMsg.textContent = '';
+      errorMsg.style.color = 'red';
+    }, 3000);
+  }
+
+  // Initialize
+  function init() {
+    const players = loadPlayerTags();
+    renderTable(players);
+  }
+
+  saveBtn.addEventListener('click', saveChanges);
+
+  init();
+</script>
+
+</body>
+</html>
