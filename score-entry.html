@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enter Scores</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    input[type="text"] { width: 60px; text-align: center; }
+    .summary { display: none; margin-top: 30px; }
+    .btn-group { margin-top: 20px; }
+    button { padding: 8px 16px; margin-right: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Enter Final Scores</h1>
+  <div id="courseInfo"></div>
+  <table id="scoreTable">
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Tag</th>
+        <th>Relative to Par</th>
+        <th>Raw Score</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="btn-group">
+    <button onclick="reviewScores()">Submit Scores</button>
+  </div>
+
+  <div class="summary" id="scoreSummary">
+    <h2>Review Scores</h2>
+    <table>
+      <thead>
+        <tr><th>Player</th><th>Tag</th><th>Relative</th><th>Raw</th></tr>
+      </thead>
+      <tbody id="summaryTable"></tbody>
+    </table>
+    <div class="btn-group">
+      <button onclick="confirmScores()">Confirm Scores</button>
+      <button onclick="cancelReview()">Edit Scores</button>
+    </div>
+  </div>
+
+  <script>
+    const roundData = JSON.parse(sessionStorage.getItem('currentRound'));
+    const tbody = document.querySelector('#scoreTable tbody');
+    const courseInfo = document.getElementById('courseInfo');
+    courseInfo.textContent = `Course: ${roundData.course} | Par: ${roundData.par} | Round ID: ${roundData.id}`;
+
+    roundData.players.forEach(player => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${player.name}</td>
+        <td>${player.tag}</td>
+        <td><input type="text" data-name="${player.name}" placeholder="+2, -1, E" oninput="updateRawScore(this)"></td>
+        <td id="raw-${player.name}"></td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    function updateRawScore(input) {
+      const rel = input.value.trim().toUpperCase();
+      const cell = document.getElementById(`raw-${input.dataset.name}`);
+      const par = parseInt(roundData.par);
+      let raw;
+
+      if (rel === 'E') raw = par;
+      else if (/^[+-]?\d+$/.test(rel)) raw = par + parseInt(rel);
+      else { cell.textContent = '?'; return; }
+
+      cell.textContent = raw;
+    }
+
+    function reviewScores() {
+      const inputs = document.querySelectorAll('input');
+      const summaryBody = document.getElementById('summaryTable');
+      summaryBody.innerHTML = '';
+
+      roundData.players.forEach(player => {
+        const input = document.querySelector(`input[data-name="${player.name}"]`);
+        const rel = input.value.trim().toUpperCase();
+        const rawCell = document.getElementById(`raw-${player.name}`);
+        const raw = parseInt(rawCell.textContent);
+
+        if (!rel || isNaN(raw)) {
+          const confirm = confirm(`No valid score entered for ${player.name}. Did they not finish?`);
+          if (confirm) {
+            player.dnf = true;
+            player.relativeScore = 'DNF';
+            player.rawScore = null;
+          } else {
+            alert('Please return and enter a valid score.');
+            return;
+          }
+        } else {
+          player.relativeScore = rel;
+          player.rawScore = raw;
+          player.dnf = false;
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${player.name}</td>
+          <td>${player.tag}</td>
+          <td>${player.relativeScore}</td>
+          <td>${player.rawScore ?? '-'}</td>
+        `;
+        summaryBody.appendChild(row);
+      });
+
+      document.getElementById('scoreSummary').style.display = 'block';
+    }
+
+    function confirmScores() {
+      let rounds = JSON.parse(localStorage.getItem('rounds')) || [];
+      roundData.timestamp = new Date().toISOString();
+      rounds.push(roundData);
+      localStorage.setItem('rounds', JSON.stringify(rounds));
+      alert('Scores saved!');
+      window.location.href = 'leaderboard.html';
+    }
+
+    function cancelReview() {
+      document.getElementById('scoreSummary').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

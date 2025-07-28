@@ -1,24 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Player Check-In</title>
-  <link rel="stylesheet" href="css/styles.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Disc Golf Tag Group Check-In</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+  label { display: block; margin-top: 10px; }
+  input, select, button { margin-top: 5px; padding: 8px; width: 100%; max-width: 300px; }
+  .player-entry { margin-bottom: 15px; }
+  .error { color: red; }
+  #players-container > div { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px; }
+  #add-player { margin-top: 10px; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Disc Golf Tag Check-In</h1>
 
-    <form id="checkin-form">
-      <label for="playerName">Enter Your Name:</label>
-      <input type="text" id="playerName" required />
-      <button type="submit">Check In</button>
-    </form>
+<h1>Disc Golf Tag Group Check-In</h1>
 
-    <div id="result" class="result-box"></div>
+<form id="checkin-form">
+
+  <label for="course">Course Name:</label>
+  <input list="courses" id="course" name="course" autocomplete="off" required />
+  <datalist id="courses">
+    <!-- Example courses -->
+    <option value="Bird Park"></option>
+    <option value="Maple Grove"></option>
+  </datalist>
+
+  <label for="par">Today's Par:</label>
+  <input type="number" id="par" name="par" min="1" max="150" required />
+
+  <div id="players-container">
+    <!-- Player inputs will go here -->
   </div>
 
-  <script src="js/checkin.js"></script>
+  <button type="button" id="add-player">+ Add Player</button>
+
+  <br /><br />
+  <button type="submit">Start Round</button>
+</form>
+
+<div id="status"></div>
+
+<script>
+  // Simulated database for players, tags, courses, and rounds
+  let playersDB = [
+    { name: 'Abe', tag: 1, lastPlayed: '2025-07-20' },
+    { name: 'Bob', tag: 2, lastPlayed: '2025-07-22' },
+    { name: 'Charlie', tag: 3, lastPlayed: '2025-07-18' }
+  ];
+  let coursesDB = [
+    { name: 'Bird Park', pars: [54] },
+    { name: 'Maple Grove', pars: [58, 60] }
+  ];
+
+  // Max number of players per round
+  const MAX_PLAYERS = 20;
+
+  // Utility to format name (capitalize each word)
+  function formatName(str) {
+    return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // Add a player input row dynamically
+  function addPlayerInput(value = '') {
+    const container = document.getElementById('players-container');
+    if (container.children.length >= MAX_PLAYERS) return;
+
+    const div = document.createElement('div');
+    div.className = 'player-entry';
+
+    const label = document.createElement('label');
+    label.textContent = `Player ${container.children.length + 1}:`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'player';
+    input.autocomplete = 'off';
+    input.value = value;
+    input.placeholder = 'Enter player name';
+    input.required = container.children.length < 3; // at least 3 required
+
+    // Autocomplete behavior: suggest matching players
+    input.addEventListener('input', e => {
+      const val = e.target.value.toLowerCase();
+      // Simple autocomplete suggestions (could be improved with datalist or a dropdown)
+      const matches = playersDB.filter(p => p.name.toLowerCase().includes(val));
+      if (matches.length === 1 && val === matches[0].name.toLowerCase()) {
+        e.target.value = matches[0].name; // fix case
+      }
+    });
+
+    // Format name on blur
+    input.addEventListener('blur', e => {
+      e.target.value = formatName(e.target.value.trim());
+    });
+
+    div.appendChild(label);
+    div.appendChild(input);
+    container.appendChild(div);
+  }
+
+  // Initialize with 5 empty player inputs
+  for (let i = 0; i < 5; i++) addPlayerInput();
+
+  // Add player button
+  document.getElementById('add-player').addEventListener('click', () => {
+    addPlayerInput();
+  });
+
+  // Handle course selection change to autopopulate par
+  document.getElementById('course').addEventListener('change', e => {
+    const courseName = e.target.value.trim();
+    const course = coursesDB.find(c => c.name.toLowerCase() === courseName.toLowerCase());
+    const parInput = document.getElementById('par');
+    if (course) {
+      // Use last par if available
+      parInput.value = course.pars[course.pars.length - 1] || '';
+    } else {
+      parInput.value = '';
+    }
+  });
+
+  // Helper: get next tag for new player
+  function getNextTag() {
+    if (playersDB.length === 0) return 1;
+    return Math.max(...playersDB.map(p => p.tag)) + 1;
+  }
+
+  // On form submit
+  document.getElementById('checkin-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const courseName = document.getElementById('course').value.trim();
+    const par = Number(document.getElementById('par').value);
+    if (!courseName || !par) {
+      alert('Please enter course and par.');
+      return;
+    }
+
+    // Gather players entered (skip empty)
+    const playerInputs = Array.from(document.querySelectorAll('input[name="player"]'));
+    const enteredNames = playerInputs
+      .map(input => formatName(input.value.trim()))
+      .filter(name => name !== '');
+
+    if (enteredNames.length === 0) {
+      alert('Please enter at least one player.');
+      return;
+    }
+
+    // Assign tags and detect conflicts
+    let assignedPlayers = [];
+    let conflict = false;
+    let conflicts = [];
+
+    enteredNames.forEach(name => {
+      let player = playersDB.find(p => p.name.toLowerCase() === name.toLowerCase());
+      if (player) {
+        assignedPlayers.push({ name, tag: player.tag });
+      } else {
+        // New player: assign new tag
+        let newTag = getNextTag();
+        assignedPlayers.push({ name, tag: newTag });
+        // Add new player to DB for next rounds
+        playersDB.push({ name, tag: newTag, lastPlayed: new Date().toISOString().slice(0, 10) });
+      }
+    });
+
+    // Check for duplicate tags in this round
+    let tagsUsed = new Set();
+    assignedPlayers.forEach(p => {
+      if (tagsUsed.has(p.tag)) {
+        conflict = true;
+        conflicts.push(p.tag);
+      } else {
+        tagsUsed.add(p.tag);
+      }
+    });
+
+    if (conflict) {
+      alert('Tag conflict detected for tag(s): ' + conflicts.join(', ') + '. Please check player entries.');
+      return;
+    }
+
+    // Create round ID: YYYYMMDDHHmm + first 4 letters of course uppercased
+    let now = new Date();
+    let pad = n => n.toString().padStart(2, '0');
+    let roundId = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${courseName.substring(0, 4).toUpperCase()}`;
+
+    // Store round data in localStorage
+    let rounds = JSON.parse(localStorage.getItem('rounds') || '[]');
+    rounds.push({
+      roundId,
+      courseName,
+      par,
+      players: assignedPlayers,
+      date: now.toISOString()
+    });
+    localStorage.setItem('rounds', JSON.stringify(rounds));
+
+    // Show confirmation & redirect to scores page
+    alert(`Round started! ID: ${roundId}\nPlayers and tags assigned.\nYou will now be redirected to the score entry page.`);
+    window.location.href = `score-entry.html?roundId=${roundId}`;
+  });
+</script>
 </body>
 </html>

@@ -1,0 +1,70 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const roundListEl = document.getElementById("round-list");
+  const roundDetailsEl = document.getElementById("round-details");
+  const roundInfoEl = document.getElementById("round-info");
+  const backButton = document.getElementById("back-button");
+
+  const rounds = JSON.parse(localStorage.getItem("rounds")) || [];
+
+  // Show list of rounds
+  if (rounds.length === 0) {
+    roundListEl.innerHTML = "<li>No rounds played yet.</li>";
+  } else {
+    rounds.forEach((round, index) => {
+      const li = document.createElement("li");
+      li.textContent = `${round.date} - ${round.courseName} (${round.coursePar} par)`;
+      li.style.cursor = "pointer";
+      li.addEventListener("click", () => showRoundDetails(index));
+      roundListEl.appendChild(li);
+    });
+  }
+
+  function showRoundDetails(index) {
+    const round = rounds[index];
+    roundListEl.style.display = "none";
+    roundDetailsEl.style.display = "block";
+
+    // Build HTML for round details
+    let html = `<p><strong>Course:</strong> ${round.courseName}</p>`;
+    html += `<p><strong>Date:</strong> ${round.date}</p>`;
+    html += `<p><strong>Course Par:</strong> ${round.coursePar}</p>`;
+    html += `<table border="1" cellpadding="5" cellspacing="0">
+               <thead>
+                 <tr>
+                   <th>Tag #</th>
+                   <th>Player</th>
+                   <th>Score</th>
+                 </tr>
+               </thead>
+               <tbody>`;
+
+    round.players.forEach(player => {
+      html += `<tr>
+                 <td>${player.tag}</td>
+                 <td>${player.name}</td>
+                 <td>${player.score}</td>
+               </tr>`;
+    });
+
+    html += "</tbody></table>";
+
+    roundInfoEl.innerHTML = html;
+  }
+
+  backButton.addEventListener("click", () => {
+    roundDetailsEl.style.display = "none";
+    roundListEl.style.display = "block";
+  });
+});
+
+localStorage.setItem("rounds", JSON.stringify([
+  {
+    date: "2025-08-01 10:00",
+    courseName: "Bird Park",
+    coursePar: 54,
+    players: [
+      { tag: 1, name: "Abe", score: 48 },
+      { tag: 2, name: "Bob", score: 50 }
+    ]
+  }
+]));

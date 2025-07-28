@@ -2,25 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Disc Golf Tags Check-In</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Disc Golf Tags App</title>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <h1>Disc Golf Tags Group</h1>
-  
-  <form id="checkInForm">
-    <label for="playerName">Player Name:</label>
-    <input type="text" id="playerName" required />
+  <header>
+    <h1>Disc Golf Tags Tracker</h1>
+    <nav>
+      <a href="checkin.html">Check-In</a> |
+      <a href="rounds.html">Past Rounds</a> |
+      <a href="tag-history.html">Full Tag Order</a>
+    </nav>
+  </header>
 
-    <button type="submit">Check In</button>
-  </form>
+  <section>
+    <h2>Welcome</h2>
+    <p>This tool helps our disc golf group manage tag rounds, player check-ins, score tracking, and tag history. You can:</p>
+    <ul>
+      <li>Check in up to 20 players and start a new round</li>
+      <li>Track who holds which tag in real time</li>
+      <li>Store past round data and update tags automatically</li>
+      <li>See leaderboards and tag history anytime</li>
+    </ul>
+  </section>
 
-  <div id="checkInResult"></div>
+  <section>
+    <h2>🏆 Current Leaderboard</h2>
+    <div id="leaderboard">
+      <p>Loading...</p>
+    </div>
+  </section>
 
-  <h2>Current Tags</h2>
-  <ul id="tagList"></ul>
+  <footer>
+    <p>Built for our local disc golf crew. ⛳</p>
+  </footer>
 
-  <script src="main.js"></script>
+  <script src="js/index.js"></script>
 </body>
 </html>
