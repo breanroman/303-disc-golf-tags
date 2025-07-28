@@ -3,31 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Disc Golf Tags Tracker</title>
-  <link rel="stylesheet" href="css/styles.css" />
+  <title>Disc Golf Tags Check-In</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Disc Golf Tags</h1>
-    <nav>
-      <a href="templates/check-in-form.html">Check-In</a> |
-      <a href="templates/leaderboard.html">Leaderboard</a> |
-      <a href="templates/tag-history.html">Tag History</a>
-    </nav>
-  </header>
+  <h1>Disc Golf Tags Group</h1>
+  
+  <form id="checkInForm">
+    <label for="playerName">Player Name:</label>
+    <input type="text" id="playerName" required />
 
-  <main>
-    <h2>Welcome to the Tag Tracking System</h2>
-    <p>This open-source app tracks disc golf tags and match results.</p>
-  </main>
+    <button type="submit">Check In</button>
+  </form>
 
-  <footer>
-    <footer style="font-size: 0.75rem; text-align: center; margin-top: 2rem;">
-        <p> © 2025 | Built with AI Coaching | <a href="https://github.com/breanroman/303-disc-golf-tags">BAR</a> — Disc Golf Tags Project | MIT Licensed</p>
-    <a href="https://github.com/yourusername/disc-golf-tags"
-        target="_blank">GitHub Repo</a>
-  </footer>
+  <div id="checkInResult"></div>
 
-  <script src="js/main.js"></script>
+  <h2>Current Tags</h2>
+  <ul id="tagList"></ul>
+
+  <script src="main.js"></script>
 </body>
 </html>
